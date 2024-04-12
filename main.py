@@ -176,6 +176,7 @@ def add_stock():
 @app.route("/search_stock", methods=["GET"])
 def search_stock():
     stock_name = request.args.get("stock_name")
+    print("stock name",stock_name)
     if not stock_name:
         return jsonify({"message": "Stock name is missing"}), 400
     db_index = get_hash_bucket(stock_name)
@@ -212,10 +213,6 @@ def delete_date_range():
 
 
 
-
-
-
-
 # Route to check user balance
 @app.route("/check_balance", methods=["GET"])
 @token_required
@@ -225,13 +222,13 @@ def check_balance():
     db_index = hash_function(username)
     db_url = User_URLS[db_index]
     response = requests.get(f"{db_url}/users/{username}.json")
+    print("response",response)
     if response.status_code == 200:
         user_data = response.json()
+        print("user data",user_data)
         return jsonify({"username": username, "balance": user_data["account_balance"]})
     else:
         return jsonify({"message": f"Failed to fetch user balance. Status code: {response.status_code}"}), 500
-
-
 
 
 @app.route("/buy_stock", methods=["POST"])
