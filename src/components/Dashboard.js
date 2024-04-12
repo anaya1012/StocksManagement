@@ -6,6 +6,11 @@ import MenuItem from '@mui/material/MenuItem';
 import Select from '@mui/material/Select';
 import './Dashboard.css'; 
 import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
+import 'ag-grid-community/styles/ag-grid.css';
+import 'ag-grid-community/styles/ag-theme-alpine.css';
+//import yfinance from 'yfinance';
+import { AgGridReact } from 'ag-grid-react';
+
 var CanvasJSChart = CanvasJSReact.CanvasJSChart;
 
 class Dashboard extends Component {
@@ -15,7 +20,7 @@ class Dashboard extends Component {
             dataPoints: [],
             volumeDataPoints: [],
             displayChart: true,
-            selectedStock: '', // Initialize selectedStock state
+            selectedStock: 'Apple', // Initialize selectedStock state
             stockDictionary : {
                 GOOG: 'Google',
                 AAPL: 'Apple',
@@ -28,7 +33,8 @@ class Dashboard extends Component {
                 CSCO: 'Cisco',
                 IBM: 'IBM'
             },
-            userBalance: 0
+            userBalance: 0,
+            stockData:[]
         };
     }
 
@@ -36,6 +42,29 @@ class Dashboard extends Component {
         // Fetch stock data for the initial selected stock
         this.fetchStockData('AAPL');
         this.fetchAccountBalance();
+        this.fetchStockListData();
+    }
+
+    fetchStockListData() {
+        const stockSymbols = Object.keys(this.state.stockDictionary);
+        const stockDataPromises = stockSymbols.map(symbol => {
+            //return yfinance.quote(symbol);
+        });
+
+        Promise.all(stockDataPromises)
+            .then(data => {
+                const stockData = data.map((stock, index) => {
+                    return {
+                        id: index + 1,
+                        name: this.state.stockDictionary[stock.symbol],
+                        change: stock.changePercent
+                    };
+                });
+                this.setState({ stockData });
+            })
+            .catch(error => {
+                console.error('Error fetching stock list data:', error);
+            });
     }
 
     fetchAccountBalance() {
@@ -106,7 +135,7 @@ class Dashboard extends Component {
             zoomEnabled: true,
             theme: "light2",
             title: {
-                text: `Stocks VS Price - ${selectedStockName}`
+                text: `Stocks Price  - ${selectedStockName}`
             },
             data: [{
                 type: "line",
@@ -122,7 +151,7 @@ class Dashboard extends Component {
             zoomEnabled: true,
             theme: "light2",
             title: {
-                text: `Stocks VS Volume - ${selectedStockName}`
+                text: `Stock Voulme- ${selectedStockName}`
             },
             data: [{
                 type: "column",
@@ -132,13 +161,15 @@ class Dashboard extends Component {
             }]
         };
 
+        const tableColumnDefs = [
+            { headerName: 'Stock Name', field: 'name' },
+            { headerName: '% Change', field: 'change' }
+        ];
 
         return (
             <>
-            <Card className="card" sx={{paddingX: 5}} elevation={5}>
-                <CardContent>
-                    {/* Dropdown to select stock */}
-                    <Select
+            {/* Dropdown to select stock */}
+            <Select
                         value={selectedStock}
                         onChange={this.handleChange}
                     >
@@ -153,8 +184,10 @@ class Dashboard extends Component {
                         <MenuItem value="CSCO">Cisco</MenuItem>
                         <MenuItem value="IBM">IBM</MenuItem>
                     </Select>
-
-                    {/* Display chart */}
+            <br/><br/>
+            <Card elevation={5}>
+                <CardContent>
+            
                     {this.state.displayChart && 
                         <CanvasJSChart 
                             options={options} 
@@ -162,7 +195,10 @@ class Dashboard extends Component {
                         />
                     }
                     </CardContent>
-                    <CardContent>
+                    </Card>
+                <br/>
+                <Card elevation={5} >
+                <CardContent>
                     {this.state.displayChart && 
                         <CanvasJSChart 
                             options={volumeChartOptions} 
@@ -170,14 +206,21 @@ class Dashboard extends Component {
                         />
                     }
                 </CardContent>
-            </Card>
-
+                </Card>
+                
             <Card className="balance-card" elevation={5}>
             <CardContent>
                 <MonetizationOnIcon style={{ fontSize: 30 }} />
                 <span><span>Account Balance: ${this.state.userBalance}</span></span>
             </CardContent>
             </Card>
+
+            <div className="ag-theme-alpine" style={{ height: '200px', width: '600px', margin: '20px auto' }}>
+                    <AgGridReact
+                        columnDefs={tableColumnDefs}
+                        rowData={this.state.stockData}
+                    ></AgGridReact>
+                </div>
             </>
         );
     }
