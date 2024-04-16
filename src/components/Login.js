@@ -53,7 +53,7 @@ const Login = () => {
         <div className="login-page">
             <div className="login-box">
                 <div className="illustration-wrapper">
-                    <img src="https://mixkit.imgix.net/art/preview/mixkit-left-handed-man-sitting-at-a-table-writing-in-a-notebook-27-original-large.png?q=80&auto=format%2Ccompress&h=700" alt="Login" />
+                    <img src="https://media.licdn.com/dms/image/D5612AQGwzlrwh14Q4A/article-cover_image-shrink_720_1280/0/1675352980476?e=1718236800&v=beta&t=k-8GUmOGOR9p9sHEYBPu6EcFwRgWUk-L2g3GJMmSUPc" alt="Login" />
                 </div>
                 <Form
                     name="login-form"
@@ -61,7 +61,7 @@ const Login = () => {
                     onFinish={onFinish}
                     onFinishFailed={onFinishFailed}
                 >
-                    <p className="form-title">Welcome back</p>
+                    <p className="form-title">Welcome to Stock Trading System</p>
                     <p>Login to the Dashboard</p>
                     <Form.Item
                         className="username-input"
@@ -90,6 +90,11 @@ const Login = () => {
                             LOGIN
                         </Button>
                     </Form.Item>
+                    
+                    <Button type="button" class= "btn btn-link" onClick={() => navigate('/register')}>
+                        Dont have an account ? Sign Up
+                    </Button>
+                   
                 </Form>
             </div>
         </div>

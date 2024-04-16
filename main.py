@@ -68,21 +68,47 @@ def token_required(func):
 
 
 def hash_function(username):
-    # Combine username and password to create a string
-    combined_str = f"{username}"
-    # Compute the hash value
-    hash_value = hash(combined_str)
-    # Use some criteria to determine whether to return 1 or 0
-    if hash_value % 2 == 0:
+    # Calculate the sum of ASCII values of all characters in the username
+    ascii_sum = sum(ord(char) for char in username)
+    
+    # Determine whether the sum is odd or even
+    if ascii_sum % 2 == 1:
         return 0
     else:
         return 1
 
 
+
+@app.route("/delete_stock/<stock_name>", methods=["DELETE"])
+def delete_stock(stock_name):
+    print("IN DELETE REQUEST", stock_name)
+    # Delete the stock from the Firebase database
+    firebase_url = "https://stock-name-6df87-default-rtdb.firebaseio.com/"
+    response = requests.delete(f"{firebase_url}/stock_names/{stock_name}.json")
+    if response.status_code == 200:
+        return "Stock deleted successfully."
+    else:
+        return jsonify({"message": f"Failed to delete stock. Status code: {response.status_code}"}), 500
+
+       
+
+
+@app.route("/get_all_stock_names", methods=["GET"])
+def get_all_stock_names():
+    firebase_url = "https://stock-name-6df87-default-rtdb.firebaseio.com/"
+    response = requests.get(f"{firebase_url}/stock_names.json")
+    if response.status_code == 200:
+        stock_names = response.json()
+        return jsonify(stock_names)
+    else:
+        return jsonify({"message": f"Failed to fetch stock names. Status code: {response.status_code}"}), 500
+
+
+
 # Route for user registration and token generation
 @app.route("/register", methods=["POST"])
 def register():
-
+    print("GOT INTO REGISTER CALL")
     # Use request.form to retrieve form data
     data = request.json
     # Extract username and password from JSON data
@@ -95,7 +121,7 @@ def register():
     if not (username and password):
         return jsonify({"message": "Username or password is missing"}), 400
     # Your registration logic here
-    return jsonify({"message": "User registered successfully"}), 200
+        return jsonify({"message": "User registered successfully"}), 200
     db_index = hash_function(username)
     db_url = User_URLS[db_index]
     account_balance = random.randint(1000, 10000)
@@ -124,7 +150,7 @@ def login():
     if not (username and password):
         return jsonify({"message": "Username or password is missing"}), 400
 
-    db_index = 0
+    db_index = hash_function(username)
     db_url = User_URLS[db_index]
     print(db_url,"sjbja")
     response = requests.get(f"{db_url}/users/{username}.json")
@@ -150,14 +176,24 @@ def get_hash_bucket(stock_name):
 
 
 # Route to add stock data
+# Route to add stock data
 @app.route("/add_stock", methods=["POST"])
 def add_stock():
     data = request.json
     stock_name = data.get("stock_name")
+    stock_nameF = data.get("stock_nameF")
     start_year = data.get("start_year")
     end_year = data.get("end_year")
     if not (stock_name and start_year and end_year):
         return jsonify({"message": "Stock name, start year, or end year is missing"}), 400
+    
+    # Add the stock name to the Firebase Realtime Database
+    firebase_url = "https://stock-name-6df87-default-rtdb.firebaseio.com/"
+    response = requests.put(f"{firebase_url}/stock_names/{stock_name}.json", json={"stock_name": stock_name , "stock_nameF": stock_nameF })
+    if response.status_code != 200:
+        return jsonify({"message": f"Failed to add stock name to the database. Status code: {response.status_code}"}), 500
+    
+    # Proceed to download stock data and add it to the database as before
     start_date = datetime(int(start_year), 1, 1)
     end_date = datetime(int(end_year), 1, 1)
     db_index = get_hash_bucket(stock_name)
@@ -319,6 +355,23 @@ def sell_stock():
     else:
         return jsonify({"message": f"Failed to fetch user data. Status code: {response.status_code}"}), 500
 
+
+
+@app.route("/get_user_info", methods=["GET"])
+def get_user_info():
+    print("MAKING EFFORT")
+    username = request.args.get("username")
+    if not username:
+        return jsonify({"message": "Username is missing"}), 400
+    
+    db_index = hash_function(username)
+    db_url = User_URLS[db_index]
+    response = requests.get(f"{db_url}/users/{username}.json")
+    if response.status_code == 200:
+        user_info = response.json()
+        return jsonify(user_info)
+    else:
+        return jsonify({"message": f"Failed to fetch user information. Status code: {response.status_code}"}), 500
 
 
 
