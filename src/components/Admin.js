@@ -11,6 +11,7 @@ const Admin = () => {
     const [stockNamesF, setStockNamesF] = useState([]);
     const [usernameInput, setUsernameInput] = useState('');
     const [userInfo, setUserInfo] = useState(null);
+    const [originalUsername, setOriginalUsername] = useState('');
 
     // Function to fetch all stock names
     const fetchStockNames = () => {
@@ -64,15 +65,40 @@ const Admin = () => {
 
     // Function to fetch user information by username
     const fetchUserInfo = () => {
-        axios.get(`http://localhost:5000/get_user_info?username=${usernameInput}`)
-            .then(response => {
-                setUserInfo(response.data);
-            })
-            .catch(error => {
-                console.error('Error fetching user information:', error);
-                setError('Error fetching user information. Please try again.'); // Set error state
-            });
+    axios.get(`http://localhost:5000/get_user_info?username=${usernameInput}`)
+        .then(response => {
+            setUserInfo(response.data);
+            // Set the original username
+            setOriginalUsername(response.data.username);
+        })
+        .catch(error => {
+
+            setError('Error fetching user information. Please try again.'); // Set error state
+        });
     };
+
+
+    // Function to update user email
+// Function to update user email
+const saveUserInfo = () => {
+    setError(''); // Reset error state
+    axios.post('http://localhost:5000/update_user_info', {
+        original_username: originalUsername,
+        updated_email: userInfo.email // Include updated email
+        // Add other fields you want to update
+    })
+    .then(response => {
+        console.log(response.data);
+        // Optionally, update UI or show a success message
+        alert('Email address updated successfully');
+    })
+    .catch(error => {
+        console.error('Error updating user information:', error);
+        setError('Error updating user information. Please try again.'); // Set error state
+        alert('Error updating email address. Please try again.');
+    });
+};
+
 
     // Fetch stock names when component mounts
     useEffect(() => {
@@ -127,8 +153,8 @@ const Admin = () => {
                             <button className="btn btn-success" onClick={addStock}>Add Stock</button>
                         </div>
                     </div>
-                    
-                    {error && <p className="text-danger">{error}</p>}
+
+
                 </div>
                 {/* Display stock names */}
 
@@ -162,7 +188,7 @@ const Admin = () => {
                         </div>
                         <div className='col-md-4'>
                             <button className="btn btn-primary" onClick={fetchUserInfo}>Fetch User Info</button>
-                        </div>  
+                        </div>
 
                     </div>
 
@@ -173,19 +199,25 @@ const Admin = () => {
             <h5 className="card-title">User Information</h5>
             <div className="form-group">
                 <label htmlFor="usernameInput">Username:</label>
-                <input
-                    type="text"
-                    className="form-control"
-                    id="usernameInput"
-                    value={userInfo.username}
-                    onChange={(e) => setUserInfo({ ...userInfo, username: e.target.value })}
-                />
+                    <input
+                        type="text"
+                        className="form-control"
+                        id="usernameInput"
+                        value={userInfo.username}
+                        readOnly // Make username read-only
+                    />
             </div>
             <div className="form-group">
-                <label htmlFor="balanceInput">Account Balance:</label>
-                <p className="card-text">{userInfo.account_balance}</p>
+                <label htmlFor="emailInput">Email Address:</label>
+                <input
+                    type="email"
+                    className="form-control"
+                    id="emailInput"
+                    value={userInfo.email}
+                    onChange={(e) => setUserInfo({ ...userInfo, email: e.target.value })}
+                />
             </div>
-            <button className="btn btn-primary" >Save</button>
+            <button className="btn btn-primary" onClick={saveUserInfo} >Save</button>
             {/* Display any other user information you want */}
         </div>
     </div>

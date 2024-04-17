@@ -6,6 +6,7 @@ import { Form, Input, Button } from 'antd';
 const Login = () => {   
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [email, setEmail] = useState(''); // Add email state
     const navigate = useNavigate(); // Initialize useNavigate
 
     const handleUsernameChange = e => {
@@ -16,6 +17,10 @@ const Login = () => {
         setPassword(e.target.value);
     };
 
+    const handleEmailChange = e => {
+        setEmail(e.target.value);
+    };
+
     const onFinishFailed = errorInfo => {
         console.log('Failed:', errorInfo);
     };
@@ -23,7 +28,8 @@ const Login = () => {
     const onFinish = async () => {
         var formData = {
             username: username,
-            password: password
+            password: password,
+            email: email // Add email to formData
         };
         console.log(formData)
         try {
@@ -75,9 +81,20 @@ const Login = () => {
                     </Form.Item>
 
                     <Form.Item
+                        name="email" // Add email field
+                        rules={[{ required: true, message: 'Please input your email!' }]}
+                        style={{ marginTop: '20px' }}
+                    >
+                        <Input
+                            placeholder="Enter Email"
+                            onChange={handleEmailChange}
+                        />
+                    </Form.Item>
+
+                    <Form.Item
                         name="password"
                         rules={[{ required: true, message: 'Please input your password!' }]}
-                        style={{ marginTop: '60px' }}
+                        style={{ marginTop: '20px' }}
                     >
                         <Input.Password
                             placeholder="Enter Password"
