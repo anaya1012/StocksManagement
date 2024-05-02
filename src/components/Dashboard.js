@@ -5,10 +5,13 @@ import CardContent from '@mui/material/CardContent';
 import MenuItem from '@mui/material/MenuItem';
 import Select from '@mui/material/Select';
 import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
+import Button from '@mui/material/Button';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 //import yfinance from 'yfinance';
+import TextField from '@mui/material/TextField'; // Import TextField component
 import { AgGridReact } from 'ag-grid-react';
+import Typography from '@mui/material/Typography'; 
 
 var CanvasJSChart = CanvasJSReact.CanvasJSChart;
 
@@ -20,27 +23,10 @@ class Dashboard extends Component {
             volumeDataPoints: [],
             displayChart: true,
             selectedStock: 'Apple', // Initialize selectedStock state
-            stockDictionary : {
-                GOOG: 'Google',
-                AAPL: 'Apple',
-                MSFT: 'Microsoft',
-                NVDA: 'NVIDIA',
-                ADBE: 'Adobe',
-                ORCL: 'Oracle',
-                INTC: 'Intel',
-                QCOM: 'Qualcomm',
-                CSCO: 'Cisco',
-                IBM: 'IBM'
-            },
+            stockDictionary : {},
             userBalance: 0,
-            stockData: [
-                {
-                    id: 1,
-                    name: 'AAPL',
-                    change: 30 // Initialize the current price of Apple to $30
-                },
-               
-            ]
+            userStocks:[],
+            stockData: []
         };
     }
 
@@ -48,11 +34,78 @@ class Dashboard extends Component {
         // Fetch stock data for the initial selected stock
         this.fetchStockData('AAPL');
         this.fetchAccountBalance();
-        setTimeout(() => {
-            this.fetchCurrentStockPrices();
-        }, 10000);
+        this.fetchStockNames(); // Fetch stock names dynamically
+        this.fetchUserStocks();
+        this.interval = setInterval(this.fetchCurrentStockPrices, 2000);
     }
 
+    componentWillUnmount() {
+        // Clear the interval when the component unmounts to avoid memory leaks
+        clearInterval(this.interval);
+    }
+
+    handleQuantityChange = (event, stock) => {
+        const quantity = parseInt(event.target.value) || 0; // Parse the quantity value to an integer
+        this.setState(prevState => ({
+            stockData: prevState.stockData.map(item => {
+                if (item.id === stock.id) {
+                    return { ...item, quantity: quantity };
+                }
+                return item;
+            })
+        }));
+    };
+
+    fetchStockNames() {
+        fetch("http://localhost:5000/get_all_stock_names")
+            .then(response => response.json())
+            .then(data => {
+                // Update the stockDictionary state with the fetched data
+                console.log(data)
+                //this.setState({ stockDictionary: data });
+                const stockNamesArray = Object.entries(data).map(([symbol, names]) => ({
+                    symbol: symbol,
+                    name: names.stock_name
+                }));
+                // Update the stockDictionary state with the fetched data
+                const stockDictionary = {};
+                stockNamesArray.forEach(stock => {
+                    stockDictionary[stock.symbol] = stock.name;
+                });
+                this.setState({ stockDictionary: stockDictionary }, () => {
+                    this.fetchStockTable(); // Call fetchStockTable after stockDictionary is set
+                });
+            })
+            
+            .catch(error => {
+                console.error('Error fetching stock names:', error);
+            });
+    }
+
+    fetchUserStocks() {
+        // Retrieve token from session storage
+        const token = sessionStorage.getItem('token');
+    
+        // Make GET request to fetch user stocks
+        fetch("http://localhost:5000/check_balance", {
+            method: 'GET',
+            headers: {
+                'Authorization': token
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log(data)
+            if (data.stocks) {
+                this.setState({ userStocks: data.stocks });
+                console.log(data.stocks);
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching user stocks:', error);
+        });
+    }
+    
     fetchStockListData() {
         const stockSymbols = Object.keys(this.state.stockDictionary);
         const stockDataPromises = stockSymbols.map(symbol => {
@@ -73,6 +126,20 @@ class Dashboard extends Component {
             .catch(error => {
                 console.error('Error fetching stock list data:', error);
             });
+    }
+
+    fetchStockTable() {
+        const stockSymbols = Object.keys(this.state.stockDictionary);
+        console.log(this.state.stockDictionary)
+        const stockData = stockSymbols.map((symbol, index) => ({
+            id: index + 1, // Start id from 1 and increment
+            name: this.state.stockDictionary[symbol],
+            symbol: symbol,
+            change: 100, // Initialize the current price of stocks to $100
+            quantity: 0 
+        }));
+        console.log(stockData);
+        this.setState({ stockData });
     }
 
     fetchAccountBalance() {
@@ -98,65 +165,28 @@ class Dashboard extends Component {
         });
     }
 
-    fetchCurrentStockPrices() {
-        const stockData = this.state.stockData;
-        const stockSymbols = stockData.map(stock => stock.name);
-        const apiKey = 'ex0YmphxQOhoe06ieCkOutAtmZgi11ec'; // Replace 'YOUR_POLYGON_API_KEY' with your actual API key
-        const stockDataPromises = stockSymbols.map(symbol => {
-            return fetch(`https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${symbol}?apiKey=${apiKey}`)
-                .then(response => response.json())
-                .then(data => {
-                    console.log(data); // Log the entire response data
-                    if(data && data.results && data.results.length > 0) {
-                        return {
-                            symbol: symbol,
-                            price: parseFloat(data.results[0].lastTrade.price)
-                        };
-                    } else {
-                        console.error(`No data found for ${symbol}`);
-                        return {
-                            symbol: symbol,
-                            price: 0
-                        };
-                    }
-                })
-                .catch(error => {
-                    console.error(`Error fetching current price for ${symbol}:`, error);
-                    return {
-                        symbol: symbol,
-                        price: 0
-                    };
-                });
+    fetchCurrentStockPrices = () => {
+        // Check if stockData exists in state
+        if (!this.state || !this.state.stockData) {
+            return;
+        }
+    
+        const updatedStockData = this.state.stockData.map(stock => {
+            // Generate a random price between 100 and 200
+            const randomPrice = Math.floor(Math.random() * (200 - 100 + 1)) + 100;
+            return {
+                ...stock,
+                change: randomPrice
+            };
         });
     
-        Promise.all(stockDataPromises)
-            .then(data => {
-                const updatedStockData = stockData.map(stock => {
-                    const updatedPrice = data.find(item => item.symbol === stock.name);
-                    if (updatedPrice) {
-                        return {
-                            ...stock,
-                            change: updatedPrice.price
-                        };
-                    }
-                    return stock;
-                });
-                this.setState({ stockData: updatedStockData });
-            })
-            .catch(error => {
-                console.error('Error fetching current stock prices:', error);
-            })
-            .finally(() => {
-                // Fetch current stock prices again after 1 second
-                setTimeout(() => {
-                    this.fetchCurrentStockPrices();
-                }, 10000);
-            });
+        // Update the state with the new stock data
+        this.setState({ stockData: updatedStockData });
     }
-    
     
 
     fetchStockData(stockName) {
+        console.log("stockName",stockName)
         // Retrieve token from session storage
         const token = sessionStorage.getItem('token');
 
@@ -185,6 +215,121 @@ class Dashboard extends Component {
             console.error('Error fetching stock data:', error);
         });
     }
+
+    handleBuyClick = (stock) => {
+        const currentPrice = stock.change; // Get the current price from the stock data
+        const quantity = stock.quantity; // Get the quantity from the stock data
+    
+        // Prepare the data for the POST request
+        const data = {
+            stock_name: stock.name,
+            price: currentPrice,
+            quantity: quantity
+        };
+    
+        // Make the POST request to the /buy_stock endpoint
+        fetch('http://localhost:5000/buy_stock', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': sessionStorage.getItem('token')
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => {
+            if (response.ok) {
+                return response.json();
+            }
+            throw new Error('Network response was not ok.');
+        })
+        .then(data => {
+            console.log('Buy response:', data);
+            if (data.message.startsWith('Successfully bought')) {
+                // Fetch the updated account balance
+                this.fetchAccountBalance();
+                this.fetchUserStocks();
+                alert(data.message)
+                this.setState(prevState => ({
+                    stockData: prevState.stockData.map(item => {
+                        if (item.id === stock.id) {
+                            return { ...item, quantity: 0 };
+                        }
+                        return item;
+                    })
+                }));
+            }
+            else{
+                alert(data.message)
+            }
+        })
+        .catch(error => {
+            console.error('Error buying stock:', error);
+            // Handle error here
+            // For example, show an error message to the user
+        });
+    };
+    
+
+    handleSellClick = (stock) => {
+        // Handle sell logic here
+        const currentPrice = stock.change; // Get the current price from the stock data
+        const quantity = stock.quantity; // Get the quantity from the stock data
+    
+        // Prepare the data for the POST request
+        const data = {
+            stock_name: stock.name,
+            price: currentPrice,
+            quantity: quantity
+        };
+    
+        // Make the POST request to the /buy_stock endpoint
+        fetch('http://localhost:5000/sell_stock', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': sessionStorage.getItem('token')
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => {
+            if (response.ok) {
+                return response.json();
+            }
+            throw new Error('Network response was not ok.');
+        })
+        .then(data => {
+            console.log('Sell response:', data);
+            if (data.message.startsWith('Successfully sold')) {
+                // Fetch the updated account balance
+                this.fetchAccountBalance();
+                this.fetchUserStocks();
+                alert(data.message)
+                this.setState(prevState => ({
+                    stockData: prevState.stockData.map(item => {
+                        if (item.id === stock.id) {
+                            return { ...item, quantity: 0 };
+                        }
+                        return item;
+                    })
+                }));
+            }
+            else{
+                alert(data.message)
+            }
+        })
+        .catch(error => {
+            console.error('Error selling stock:', error);
+            // Handle error here
+            // For example, show an error message to the user
+        });
+    };
+
+    handleStockClick = (stockName) => {
+        
+        this.setState({ selectedStock: stockName });
+        this.fetchStockData(stockName);
+    };
+
 
     handleChange = (event) => {
         const stockName = event.target.value;
@@ -217,7 +362,7 @@ class Dashboard extends Component {
             zoomEnabled: true,
             theme: "light2",
             title: {
-                text: `Stock Voulme- ${selectedStockName}`
+                text: `Stock Volume- ${selectedStockName}`
             },
             data: [{
                 type: "column",
@@ -227,31 +372,65 @@ class Dashboard extends Component {
             }]
         };
 
+        
         const tableColumnDefs = [
             { headerName: 'Stock Name', field: 'name' },
-            { headerName: 'Current Price', field: 'change' }
+            { headerName: 'Stock Symbol', field: 'symbol' },
+            { headerName: 'Current Price', field: 'change' },
+            {
+                headerName: 'Quantity',
+                field: 'quantity',
+                cellRenderer: params => (
+                    <TextField
+                    type="number"
+                    value={params.data.quantity}
+                    onChange={(event) => this.handleQuantityChange(event, params.data)}
+                    
+                />
+                )
+            },
+            {
+                headerName: 'Actions',
+                cellRenderer: params => (
+                    <div>
+                        <Button variant="contained" color="primary" onClick={() => this.handleBuyClick(params.data)}>Buy</Button>
+                        <span style={{ marginRight: '8px' }}></span> {/* Adjust the margin-right value as needed */}
+                        <Button variant="contained" color="secondary" onClick={() => this.handleSellClick(params.data)}>Sell</Button>
+                    </div>
+                )
+            }
         ];
+
+        const columnDefs = [
+            { headerName: 'Stock Symbol', field: 'symbol' },
+            { headerName: 'Quantity', field: 'quantity' }
+        ];
+
+        // Convert userStocks object into an array of objects for row data
+        const rowData = Object.keys(this.state.userStocks).map((symbol, index) => ({
+            id: index,
+            symbol: symbol,
+            quantity: this.state.userStocks[symbol].quantity
+        }));
 
         return (
             <>
-            {/* Dropdown to select stock */}
-            <Select
-                        value={selectedStock}
-                        onChange={this.handleChange}
-                    >
-                        <MenuItem value="GOOG">Google</MenuItem>
-                        <MenuItem value="AAPL">Apple</MenuItem>
-                        <MenuItem value="MSFT">Microsoft</MenuItem>
-                        <MenuItem value="NVDA">NVIDIA</MenuItem>
-                        <MenuItem value="ADBE">Adobe</MenuItem>
-                        <MenuItem value="ORCL">Oracle</MenuItem>
-                        <MenuItem value="INTC">Intel</MenuItem>
-                        <MenuItem value="QCOM">Qualcomm</MenuItem>
-                        <MenuItem value="CSCO">Cisco</MenuItem>
-                        <MenuItem value="IBM">IBM</MenuItem>
-                    </Select>
-            <br/><br/>
-            <Card elevation={5}>
+             {/* Display stocks horizontally */}
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px', marginTop:'30px'}}>
+                    {Object.keys(this.state.stockDictionary).map(stock => (
+                        <Button
+                            key={stock}
+                            variant="outlined"
+                            style={{ fontSize: '15px', padding: '10px 20px', margin:'10px', fontWeight: 'bold', color: 'black', borderColor: 'black'}} 
+                            // color={(this.state.selectedStock && this.state.selectedStock === stock) ? 'primary' : 'default'}
+                            onClick={() => this.handleStockClick(stock)}
+                        >
+                            {this.state.stockDictionary[stock]}
+                        </Button>
+                    ))}
+                </div>
+
+            <Card elevation={5} style={{ marginLeft: '30px', marginRight: '30px' }}>
                 <CardContent>
             
                     {this.state.displayChart && 
@@ -260,10 +439,10 @@ class Dashboard extends Component {
                             onRef={ref => this.chart = ref} 
                         />
                     }
-                    </CardContent>
-                    </Card>
+                </CardContent>
+            </Card>
                 <br/>
-                <Card elevation={5} >
+                <Card elevation={5} style={{ marginLeft: '30px', marginRight: '30px' }} >
                 <CardContent>
                     {this.state.displayChart && 
                         <CanvasJSChart 
@@ -273,20 +452,35 @@ class Dashboard extends Component {
                     }
                 </CardContent>
                 </Card>
-                
-            <Card className="balance-card" elevation={5}>
+                <br></br>
+            <Card className="balance-card" elevation={5} style={{ marginLeft: '30px', marginRight: '30px' }}>
             <CardContent>
-                <MonetizationOnIcon style={{ fontSize: 30 }} />
-                <span><span>Account Balance: ${this.state.userBalance}</span></span>
+            <Typography variant="h3" gutterBottom>User Information</Typography>
+                
+                <span><span><h3>Account Balance: ${this.state.userBalance}</h3></span></span>
+                <div>
+                            <h3>Stocks Bought by the user:</h3>
+                            <div className="ag-theme-alpine" style={{ height: '200px', width: '400px' }}>
+                                <AgGridReact
+                                    columnDefs={columnDefs}
+                                    rowData={rowData}
+                                />
+                            </div>
+                        </div>
             </CardContent>
             </Card>
-
-            <div className="ag-theme-alpine" style={{ height: '200px', width: '600px', margin: '20px auto' }}>
+            <br/>
+            <Card className="balance-card" elevation={5} style={{ marginLeft: '30px', marginRight: '30px' }}>
+            <CardContent>
+            <Typography variant="h3" gutterBottom>Trade Stocks at Real time price</Typography>
+            <div className="ag-theme-alpine" style={{ height: '200px', width: '1000px', margin: '20px auto' }}>
                     <AgGridReact
                         columnDefs={tableColumnDefs}
                         rowData={this.state.stockData}
                     ></AgGridReact>
-                </div>
+            </div>
+            </CardContent>
+            </Card>
             </>
         );
     }
