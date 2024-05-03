@@ -2,22 +2,20 @@ from datetime import datetime, timedelta
 import jwt
 from flask import Flask, request, jsonify
 import yfinance as yf
-import hashlib
 import requests
 import random
 from functools import wraps
 from flask import Flask
 from flask_cors import CORS
 
-
 app = Flask(__name__)
 CORS(app)
 
 Database_URLS = {
-    0: "https://stock-market-data-management-default-rtdb.firebaseio.com/",
-    1: "https://stock-market-data-management-1-default-rtdb.firebaseio.com/",
-    2: "https://stock-market-data-management-2-default-rtdb.firebaseio.com/",
-    3: "https://stock-market-data-management-3-default-rtdb.firebaseio.com/"
+    0: "https://stockdata0-cef07-default-rtdb.firebaseio.com/",
+    1: "https://stocksdata1-default-rtdb.firebaseio.com/",
+    2: "https://stocksdata2-default-rtdb.firebaseio.com/",
+    3: "https://stocksdata3-default-rtdb.firebaseio.com/"
 }
 
 User_URLS = {
@@ -43,6 +41,7 @@ def generate_token(username):
     token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
     return token
 
+
 # Function to decode and validate JWT token
 def decode_token(token):
     try:
@@ -52,6 +51,7 @@ def decode_token(token):
         return "Token expired. Please log in again."
     except jwt.InvalidTokenError:
         return "Invalid token. Please log in again."
+
 
 # Function to validate JWT token from request headers
 def token_required(func):
@@ -64,33 +64,65 @@ def token_required(func):
         if isinstance(decoded_token, str):
             return jsonify({"message": decoded_token}), 401
         return func(*args, **kwargs)
+
     return decorated
 
 
 def hash_function(username):
     # Calculate the sum of ASCII values of all characters in the username
     ascii_sum = sum(ord(char) for char in username)
-    
+
     # Determine whether the sum is odd or even
     if ascii_sum % 2 == 1:
         return 0
     else:
         return 1
 
-
+def get_hash_bucket(stock_name):
+    ascii_sum = sum(ord(char) for char in stock_name)
+    return ascii_sum%4
 
 @app.route("/delete_stock/<stock_name>", methods=["DELETE"])
 def delete_stock(stock_name):
     print("IN DELETE REQUEST", stock_name)
     # Delete the stock from the Firebase database
     firebase_url = "https://stock-name-6df87-default-rtdb.firebaseio.com/"
+    db_index = get_hash_bucket(stock_name)
+    firebase_url2 = Database_URLS[db_index]
     response = requests.delete(f"{firebase_url}/stock_names/{stock_name}.json")
-    if response.status_code == 200:
+    response2 = requests.delete(f"{firebase_url2}/stocks/{stock_name}.json")
+    if response.status_code == 200 and response2.status_code == 200:
         return "Stock deleted successfully."
     else:
         return jsonify({"message": f"Failed to delete stock. Status code: {response.status_code}"}), 500
 
-       
+
+@app.route("/update_user_info", methods=["POST"])
+def update_user_info():
+    data = request.json
+    original_username = data.get("original_username")
+    updated_email = data.get("updated_email")
+
+    if not (original_username and updated_email):
+        return jsonify({"message": "Original username or updated email is missing"}), 400
+
+    db_index = hash_function(original_username)
+    db_url = User_URLS[db_index]
+
+    response = requests.get(f"{db_url}/users/{original_username}.json")
+    if response.status_code == 200:
+        user_data = response.json()
+        user_data["email"] = updated_email
+
+        update_response = requests.put(f"{db_url}/users/{original_username}.json", json=user_data)
+
+        if update_response.status_code == 200:
+            print("EMail Updated")
+            return jsonify({"message": "Email updated successfully"}), 200
+        else:
+            return jsonify({"message": f"Failed to update email. Status code: {update_response.status_code}"}), 500
+    else:
+        return jsonify({"message": f"Failed to fetch user information. Status code: {response.status_code}"}), 500
 
 
 @app.route("/get_all_stock_names", methods=["GET"])
@@ -104,7 +136,6 @@ def get_all_stock_names():
         return jsonify({"message": f"Failed to fetch stock names. Status code: {response.status_code}"}), 500
 
 
-
 # Route for user registration and token generation
 @app.route("/register", methods=["POST"])
 def register():
@@ -114,13 +145,14 @@ def register():
     # Extract username and password from JSON data
     username = data.get("username")
     password = data.get("password")
+    email = data.get("email")
 
     # Do something with the data (e.g., store it in a database)
     print("Username:", username)
     print("Password:", password)
     if not (username and password):
         return jsonify({"message": "Username or password is missing"}), 400
-    # Your registration logic here
+        # Your registration logic here
         return jsonify({"message": "User registered successfully"}), 200
     db_index = hash_function(username)
     db_url = User_URLS[db_index]
@@ -128,7 +160,8 @@ def register():
     user_data = {
         "username": username,
         "password": password,
-        "account_balance": account_balance
+        "account_balance": account_balance,
+        "email": email
     }
     response = requests.put(f"{db_url}/users/{username}.json", json=user_data)
     if response.status_code == 200:
@@ -152,7 +185,6 @@ def login():
 
     db_index = hash_function(username)
     db_url = User_URLS[db_index]
-    print(db_url,"sjbja")
     response = requests.get(f"{db_url}/users/{username}.json")
     if response.status_code == 200:
         user_data = response.json()
@@ -165,16 +197,6 @@ def login():
     else:
         return jsonify({"message": "User does not exist"}), 404
 
-
-def get_hash_bucket(stock_name):
-    hash_object = hashlib.sha1(stock_name.encode())
-    hash_hex = hash_object.hexdigest()
-    hash_int = int(hash_hex, 16)
-    return hash_int % 4
-
-
-
-
 # Route to add stock data
 # Route to add stock data
 @app.route("/add_stock", methods=["POST"])
@@ -186,13 +208,15 @@ def add_stock():
     end_year = data.get("end_year")
     if not (stock_name and start_year and end_year):
         return jsonify({"message": "Stock name, start year, or end year is missing"}), 400
-    
+
     # Add the stock name to the Firebase Realtime Database
     firebase_url = "https://stock-name-6df87-default-rtdb.firebaseio.com/"
-    response = requests.put(f"{firebase_url}/stock_names/{stock_name}.json", json={"stock_name": stock_name , "stock_nameF": stock_nameF })
+    response = requests.put(f"{firebase_url}/stock_names/{stock_name}.json",
+                            json={"stock_name": stock_name, "stock_nameF": stock_nameF})
     if response.status_code != 200:
-        return jsonify({"message": f"Failed to add stock name to the database. Status code: {response.status_code}"}), 500
-    
+        return jsonify(
+            {"message": f"Failed to add stock name to the database. Status code: {response.status_code}"}), 500
+
     # Proceed to download stock data and add it to the database as before
     start_date = datetime(int(start_year), 1, 1)
     end_date = datetime(int(end_year), 1, 1)
@@ -204,9 +228,11 @@ def add_stock():
     data_stock_json = data_stock.to_json(orient='records')
     response = requests.put(f"{db_url}/stocks/{stock_name}.json", data=data_stock_json)
     if response.status_code == 200:
+        print("stock added to ", db_url)
         return "Stock data added successfully."
     else:
         return jsonify({"message": f"Failed to add stock data. Status code: {response.status_code}"}), 500
+
 
 # Route to search stock by name
 @app.route("/search_stock", methods=["GET"])
@@ -222,6 +248,7 @@ def search_stock():
         return jsonify(stocks_data)
     else:
         return jsonify({"message": f"Failed to search stock. Status code: {response.status_code}"}), 500
+
 
 # Route to delete stock data by date range
 @app.route("/delete_date_range", methods=["DELETE"])
@@ -247,11 +274,6 @@ def delete_date_range():
         return jsonify({"message": f"Failed to delete date range. Status code: {response.status_code}"}), 500
 
 
-
-
-
-
-
 # Route to check user balance
 @app.route("/check_balance", methods=["GET"])
 @token_required
@@ -263,11 +285,10 @@ def check_balance():
     response = requests.get(f"{db_url}/users/{username}.json")
     if response.status_code == 200:
         user_data = response.json()
-        return jsonify({"username": username, "balance": user_data["account_balance"]})
+        print(user_data)
+        return jsonify({"username": username, "balance": user_data["account_balance"], "stocks": user_data["stocks"]})
     else:
         return jsonify({"message": f"Failed to fetch user balance. Status code: {response.status_code}"}), 500
-
-
 
 
 @app.route("/buy_stock", methods=["POST"])
@@ -295,10 +316,20 @@ def buy_stock():
     if response.status_code == 200:
         user_data = response.json()
         # Check if the user's balance is sufficient for the transaction
+        print("userData", user_data)
         if user_data["account_balance"] >= total_cost:
             # Deduct the total cost from the user's balance
             user_data["account_balance"] -= total_cost
             # Update the user's data in the database
+            print("stocks", user_data.get("stocks", {}))
+            if "stocks" not in user_data:
+                user_data["stocks"] = {}  # Initialize the stocks dictionary if it doesn't exist
+            if stock_name in user_data["stocks"]:
+                # If the user already owns shares, update the quantity
+                user_data["stocks"][stock_name]["quantity"] += quantity
+            else:
+                # If the user doesn't own shares, add the stock to the user's portfolio
+                user_data["stocks"][stock_name] = {"quantity": quantity}
             response = requests.put(f"{db_url}/users/{username}.json", json=user_data)
             if response.status_code == 200:
                 return jsonify({"message": f"Successfully bought {quantity} shares of {stock_name}"}), 200
@@ -310,11 +341,11 @@ def buy_stock():
         return jsonify({"message": f"Failed to fetch user data. Status code: {response.status_code}"}), 500
 
 
-
 @app.route("/sell_stock", methods=["POST"])
 @token_required
 def sell_stock():
     data = request.json
+    print("userData", data)
     token = request.headers.get("Authorization")
     username = decode_token(token)["username"]
     stock_name = data.get("stock_name")
@@ -332,12 +363,15 @@ def sell_stock():
     db_index = hash_function(username)
     db_url = User_URLS[db_index]
     response = requests.get(f"{db_url}/users/{username}.json")
-
+    print("dbUrl", db_url)
+    print("response", response)
     if response.status_code == 200:
         user_data = response.json()
+        print("userData", user_data)
         # Check if the user has enough shares to sell
         if stock_name in user_data.get("stocks", {}):
-            current_quantity = user_data["stocks"][stock_name]["quantity"]
+            current_quantity = quantity
+            print("current", current_quantity)
             if current_quantity >= quantity:
                 # Calculate the new balance after selling the stocks
                 user_data["account_balance"] += total_value
@@ -356,14 +390,13 @@ def sell_stock():
         return jsonify({"message": f"Failed to fetch user data. Status code: {response.status_code}"}), 500
 
 
-
 @app.route("/get_user_info", methods=["GET"])
 def get_user_info():
     print("MAKING EFFORT")
     username = request.args.get("username")
     if not username:
         return jsonify({"message": "Username is missing"}), 400
-    
+
     db_index = hash_function(username)
     db_url = User_URLS[db_index]
     response = requests.get(f"{db_url}/users/{username}.json")
@@ -372,7 +405,6 @@ def get_user_info():
         return jsonify(user_info)
     else:
         return jsonify({"message": f"Failed to fetch user information. Status code: {response.status_code}"}), 500
-
 
 
 if __name__ == "__main__":
