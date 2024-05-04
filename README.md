@@ -26,5 +26,26 @@ To run this project locally, follow these steps:
     ### `npm start`
 
 This will run the app in the development mode.
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- Open [http://localhost:3000/admin](http://localhost:3000/admin) to view the Admin interface.
+- Open [http://localhost:3000](http://localhost:3000) to view the User Interface.
+
+## File structure:
+**public folder:** Contains files that are publicly accessible. It also contains the index.html file which serves as the entry point for the React application. 
+
+**src folder:** This directory contains source code for the frontend ReactJS application. 
+
+   - components folder: This folder contains the React components listed below:
+   1. Admin.js: This file contains compaonent to add stocks, delete stocks and update user information.
+   2. Dashboard.js: THhis file contains component to render graphs to analyse historical data,user information and options to buy and sell stocks.
+   3. Login.js:  This file contains the component responsible for rendering the login form and handling user authentication.
+   4. Login.css: This file likely contains CSS styles specific to the login component of the application
+   5. Register.js: This file contains the component responsible for rendering the registration form and handling user registration. 
+
+**README.md:** This file contains information about the project, its structure, dependencies, and how to run.   
+  
+**main.py:** This contains backend code for the flask application. It provides API's for managing stock data and user profiles.
+
+**package.json and package-lock.json:**
+package.json contains metadata about the project and lists dependencies.
+package-lock.json is automatically generated and locks the version of dependencies to ensure consistency across different environments.
 
