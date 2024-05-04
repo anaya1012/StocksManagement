@@ -34,7 +34,7 @@ This will run the app in the development mode.
 
 **src folder:** This directory contains source code for the frontend ReactJS application. 
 
-   - components folder: This folder contains the React components listed below:
+   -components folder: This folder contains the React components listed below:
    1. Admin.js: This file contains compaonent to add stocks, delete stocks and update user information.
    2. Dashboard.js: THhis file contains component to render graphs to analyse historical data,user information and options to buy and sell stocks.
    3. Login.js:  This file contains the component responsible for rendering the login form and handling user authentication.
